@@ -469,13 +469,7 @@ func BuildFlagSet(flagSet *pflag.FlagSet) error {
 
 	flagSet.IntP("max-idle-conns-per-host", "", 100, "The number of maximum idle connections allowed per server.")
 
-	flagSet.IntP("max-read-ahead-kb", "", 1024, "Max read ahead in KiB by kernel while performing reads.")
-
-	if err := flagSet.MarkHidden("max-read-ahead-kb"); err != nil {
-		return err
-	}
-
-	flagSet.IntP("max-read-ahead-kb", "", 1024, "Max read ahead in KiB by kernel while performing reads.")
+	flagSet.IntP("max-read-ahead-kb", "", 16384, "Max read ahead in KiB by kernel while performing reads.")
 
 	if err := flagSet.MarkHidden("max-read-ahead-kb"); err != nil {
 		return err
