@@ -61,7 +61,7 @@ func SetupOTelMetricExporters(ctx context.Context, c *cfg.Config) (shutdownFn co
 		options = append(options, metric.WithResource(res))
 	}
 
-	options = append(options, metric.WithView(dropDisallowedMetricsView))
+	//options = append(options, metric.WithView(dropDisallowedMetricsView))
 
 	meterProvider := metric.NewMeterProvider(options...)
 	shutdownFns = append(shutdownFns, meterProvider.Shutdown)

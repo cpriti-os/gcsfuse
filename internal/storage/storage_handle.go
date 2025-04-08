@@ -107,7 +107,7 @@ func createClientOptionForGRPCClient(clientConfig *storageutil.StorageClientConf
 	clientOpts = append(clientOpts, option.WithUserAgent(clientConfig.UserAgent))
 	// Turning off the go-sdk metrics exporter to prevent any problems.
 	// TODO (kislaykishore) - to revisit here for monitoring support.
-	clientOpts = append(clientOpts, storage.WithDisabledClientMetrics())
+	//clientOpts = append(clientOpts, storage.WithDisabledClientMetrics())
 	return
 }
 
