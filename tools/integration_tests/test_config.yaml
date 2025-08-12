@@ -80,3 +80,18 @@ write_large_files:
           flat: true
           hns: true
           zonal: true
+
+operations:
+  - mounted_directory: "${MOUNTED_DIR}" # To be passed by GKE after mounting
+    test_bucket: "pranjal-bucket-1" # To be passed by both gcsfuse and gke tests
+    log_file: # Optional flag required by some tests where log parsing is done to validate end behavior
+    flags:
+      - "--enable-atomic-rename-object=true"
+      - "--experimental-enable-json-read=true"
+      - "--client-protocol=grpc --implicit-dirs=true --enable-atomic-rename-object=true"
+      - "--experimental-enable-json-read=true --enable-atomic-rename-object=true"
+    compatible: # Bucket type to run these tests with
+      - flat: true
+      - hns: true
+      - zonal: true
+    run_on_gke: false

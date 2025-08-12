@@ -137,6 +137,10 @@ func TestDir() string {
 	return testDir
 }
 
+func SetBucketFromConfigFile(testBucketFromConfigFile string) {
+	testBucket = &testBucketFromConfigFile
+}
+
 func SetMntDir(mntDirValue string) {
 	mntDir = mntDirValue
 }
