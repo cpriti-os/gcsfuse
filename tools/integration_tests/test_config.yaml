@@ -83,7 +83,7 @@ write_large_files:
 
 operations:
   - mounted_directory: "${MOUNTED_DIR}" # To be passed by GKE after mounting
-    test_bucket: "pranjal-bucket-1" # To be passed by both gcsfuse and gke tests
+    test_bucket: "${BUCKET_NAME}" # To be passed by both gcsfuse and gke tests
     log_file: # Optional flag required by some tests where log parsing is done to validate end behavior
     flags:
       - "--enable-atomic-rename-object=true"
