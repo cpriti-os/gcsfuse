@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"testing"
 
 	"cloud.google.com/go/storage"
@@ -117,14 +116,14 @@ func TestMain(m *testing.M) {
 			log.Fatalf("Failed to parse config YAML: %v", err)
 		}
 	}
-	var TempDirectory = os.TempDir()
 	if len(cfg.Operations) == 0 {
 		log.Println("No configuration found for operations tests in config. Using flags instead.")
 		// Populate the config manually.
 		cfg.Operations = make([]test_suite.TestConfig, 1)
 		cfg.Operations[0].TestBucket = setup.TestBucket()
-		// TODO : use yaml file and manually input the flags.
-		cfg.Operations[0].Flags = []string{
+		cfg.Operations[0].MountedDirectory = setup.MountedDirectory()
+		cfg.Operations[0].Configs = make([]test_suite.ConfigItem, 1)
+		cfg.Operations[0].Configs[0].Flags = []string{
 			"--enable-atomic-rename-object=true",
 			"--experimental-enable-json-read=true",
 			"--client-protocol=grpc --implicit-dirs=true --enable-atomic-rename-object=true",
@@ -133,20 +132,20 @@ func TestMain(m *testing.M) {
 			"--metadata-cache-ttl-secs=0 --enable-streaming-writes=false",
 			"--kernel-list-cache-ttl-secs=-1 --implicit-dirs=true",
 		}
-		cacheDirflag := fmt.Sprintf("--file-cache-max-size-mb=2 --cache-dir=%s/cache-dir-operations-hns", TempDirectory)
-		cfg.Operations[0].Flags = append(cfg.Operations[0].Flags, cacheDirflag)
-		cfg.Operations[0].MountedDirectory = setup.MountedDirectory()
+		cacheDirFlag := fmt.Sprintf("--file-cache-max-size-mb=2 --cache-dir=%s/cache-dir-operations-hns", os.TempDir())
+		cfg.Operations[0].Configs[0].Flags = append(cfg.Operations[0].Configs[0].Flags, cacheDirFlag)
+		cfg.Operations[0].Configs[0].Compatible = map[string]bool{"flat": true, "hns": true, "zonal": false}
 	}
 	// 2. Create storage client before running tests.
-	var err error
 	setup.SetTestBucket(cfg.Operations[0].TestBucket)
 	ctx = context.Background()
-	storageClient, err = client.CreateStorageClient(ctx)
-	if err != nil {
-		log.Printf("Error creating storage client: %v\n", err)
-		os.Exit(1)
-	}
-	defer storageClient.Close()
+	closeStorageClient := client.CreateStorageClientWithCancel(&ctx, &storageClient)
+	defer func() {
+		err := closeStorageClient()
+		if err != nil {
+			log.Printf("closeStorageClient failed: %v", err)
+		}
+	}()
 
 	// 3. To run mountedDirectory tests, we need both testBucket and mountedDirectory
 	// flags to be set, as operations tests validates content from the bucket.
@@ -155,14 +154,18 @@ func TestMain(m *testing.M) {
 	}
 
 	// Run tests for testBucket
+	// 4. Build the flag sets dynamically from the config.
+	bucketType, err := setup.BucketType(ctx, cfg.Operations[0].TestBucket)
+	if err != nil {
+		log.Fatalf("BucketType failed: %v", err)
+	}
+	if bucketType == setup.ZonalBucket {
+		setup.SetIsZonalBucketRun(true)
+	}
+	flags := setup.BuildFlagSets(cfg.Operations[0], bucketType)
+
 	// Set up test directory.
 	setup.SetUpTestDirForTestBucket(cfg.Operations[0].TestBucket)
-
-	// 4. Build the flag sets dynamically from the config.
-	var flags [][]string
-	for _, flagString := range cfg.Operations[0].Flags {
-		flags = append(flags, strings.Fields(flagString))
-	}
 
 	// Only running static_mounting test for TPC.
 	if setup.TestOnTPCEndPoint() {
