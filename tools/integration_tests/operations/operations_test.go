@@ -139,7 +139,7 @@ func TestMain(m *testing.M) {
 	}
 	// 2. Create storage client before running tests.
 	var err error
-	setup.SetBucketFromConfigFile(cfg.Operations[0].TestBucket)
+	setup.SetTestBucket(cfg.Operations[0].TestBucket)
 	ctx = context.Background()
 	storageClient, err = client.CreateStorageClient(ctx)
 	if err != nil {

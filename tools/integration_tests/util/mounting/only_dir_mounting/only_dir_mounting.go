@@ -34,7 +34,7 @@ func MountGcsfuseWithOnlyDir(flags []string) (err error) {
 		MountedDirectory: setup.MountedDirectory(),
 		LogFile:          setup.LogFile(),
 	}
-	return MountGcsfuseWithOnlyDirMountingWithConfigFile(config, flags)
+	return MountGcsfuseWithOnlyDirWithConfigFile(config, flags)
 }
 
 func MountGcsfuseWithOnlyDirWithConfigFile(config *test_suite.TestConfig, flags []string) (err error) {
@@ -56,7 +56,7 @@ func MountGcsfuseWithOnlyDirWithConfigFile(config *test_suite.TestConfig, flags 
 
 func mountGcsFuseForFlagsAndExecuteTests(config *test_suite.TestConfig, flags [][]string, m *testing.M) (successCode int) {
 	for i := 0; i < len(flags); i++ {
-		if err := MountGcsfuseWithOnlyDirMountingWithConfigFile(config, flags[i]); err != nil {
+		if err := MountGcsfuseWithOnlyDirWithConfigFile(config, flags[i]); err != nil {
 			setup.LogAndExit(fmt.Sprintf("mountGcsfuse: %v\n", err))
 		}
 		log.Printf("Running only dir mounting tests with flags: %s", flags[i])
