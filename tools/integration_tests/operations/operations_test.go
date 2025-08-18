@@ -173,7 +173,7 @@ func TestMain(m *testing.M) {
 	successCode := static_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, m)
 
 	if successCode == 0 {
-		successCode = only_dir_mounting.RunTests(flags, onlyDirMounted, m)
+		successCode = only_dir_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, onlyDirMounted, m)
 	}
 
 	if successCode == 0 {
@@ -186,7 +186,7 @@ func TestMain(m *testing.M) {
 
 	if successCode == 0 {
 		// Test for admin permission on test bucket.
-		successCode = creds_tests.RunTestsForKeyFileAndGoogleApplicationCredentialsEnvVarSet(ctx, storageClient, flags, "objectAdmin", m)
+		successCode = creds_tests.RunTestsForKeyFileAndGoogleApplicationCredentialsEnvVarSetWithConfigFile(&cfg.Operations[0], ctx, storageClient, flags, "objectAdmin", m)
 	}
 
 	os.Exit(successCode)
