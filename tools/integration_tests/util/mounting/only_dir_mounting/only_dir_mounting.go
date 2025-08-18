@@ -37,7 +37,7 @@ func MountGcsfuseWithOnlyDir(flags []string) (err error) {
 	return MountGcsfuseWithOnlyDirMountingWithConfigFile(config, flags)
 }
 
-func MountGcsfuseWithOnlyDirMountingWithConfigFile(config *test_suite.TestConfig, flags []string) (err error) {
+func MountGcsfuseWithOnlyDirWithConfigFile(config *test_suite.TestConfig, flags []string) (err error) {
 	defaultArg := []string{"--only-dir",
 		setup.OnlyDirMounted(),
 		"--log-severity=trace",
