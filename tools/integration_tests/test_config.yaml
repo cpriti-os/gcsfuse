@@ -93,7 +93,7 @@ operations:
       - "--create-empty-file=true --enable-atomic-rename-object=true"
       - "--metadata-cache-ttl-secs=0 --enable-streaming-writes=false"
       - "--kernel-list-cache-ttl-secs=-1 --implicit-dirs=true"
-      # - "--file-cache-max-size-mb=2 --cache-dir=${TMPDIR}/cache-dir-operations-hns"
+      - "--file-cache-max-size-mb=2 --cache-dir=/$DIR/cache-dir-operations-hns" # ${DIR} needs to be set as per TempDirectory, for GCSFUSE tests: temp
     compatible: # Bucket type to run these tests with
       - flat: true
       - hns: true
