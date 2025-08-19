@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/storage"
@@ -94,6 +95,7 @@ var (
 	cacheDir      string
 	storageClient *storage.Client
 	ctx           context.Context
+	err           error
 )
 
 // Config holds all test configurations parsed from the YAML file.
@@ -101,11 +103,47 @@ type Config struct {
 	Operations []test_suite.TestConfig `yaml:"operations"`
 }
 
+func RunTestOnTPCEndPoint(cfg Config, m *testing.M) int {
+	ctx = context.Background()
+	if storageClient, err = client.CreateStorageClient(ctx); err != nil {
+		log.Fatalf("Error creating storage client: %v\n", err)
+	}
+	cfg.Operations = make([]test_suite.TestConfig, 1)
+	cfg.Operations[0].TestBucket = setup.TestBucket()
+	cfg.Operations[0].MountedDirectory = setup.MountedDirectory()
+	cfg.Operations[0].Configs = make([]test_suite.ConfigItem, 1)
+	cfg.Operations[0].Configs[0].Flags = []string{
+		"--enable-atomic-rename-object=true",
+		"--experimental-enable-json-read=true",
+		"--create-empty-file=true --enable-atomic-rename-object=true",
+		"--metadata-cache-ttl-secs=0 --enable-streaming-writes=false",
+		"--kernel-list-cache-ttl-secs=-1 --implicit-dirs=true",
+	}
+	cacheDirFlag := fmt.Sprintf("--file-cache-max-size-mb=2 --cache-dir=%s/cache-dir-operations-hns", os.TempDir())
+	cfg.Operations[0].Configs[0].Flags = append(cfg.Operations[0].Configs[0].Flags, cacheDirFlag)
+	cfg.Operations[0].Configs[0].Compatible = map[string]bool{"flat": true, "hns": true, "zonal": false}
+	var flags [][]string
+
+	// Iterate over the original flags and split each string by spaces
+	for _, flagSet := range cfg.Operations[0].Configs[0].Flags {
+		splitFlags := strings.Fields(flagSet)
+		flags = append(flags, splitFlags)
+	}
+	setup.SetUpTestDirForTestBucket(cfg.Operations[0].TestBucket)
+	successCodeTPC := static_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, m)
+	return successCodeTPC
+}
 func TestMain(m *testing.M) {
 	setup.ParseSetUpFlags()
+	var cfg Config
+
+	if setup.TestOnTPCEndPoint() {
+		log.Println("Running TPC tests.")
+		successCodeTPC := RunTestOnTPCEndPoint(cfg, m)
+		os.Exit(successCodeTPC)
+	}
 
 	// 1. Load and parse the common configuration.
-	var cfg Config
 	if setup.ConfigFile() != "" {
 		configData, err := os.ReadFile(setup.ConfigFile())
 		if err != nil {
@@ -116,6 +154,7 @@ func TestMain(m *testing.M) {
 			log.Fatalf("Failed to parse config YAML: %v", err)
 		}
 	}
+
 	if len(cfg.Operations) == 0 {
 		log.Println("No configuration found for operations tests in config. Using flags instead.")
 		// Populate the config manually.
@@ -136,6 +175,7 @@ func TestMain(m *testing.M) {
 		cfg.Operations[0].Configs[0].Flags = append(cfg.Operations[0].Configs[0].Flags, cacheDirFlag)
 		cfg.Operations[0].Configs[0].Compatible = map[string]bool{"flat": true, "hns": true, "zonal": false}
 	}
+
 	// 2. Create storage client before running tests.
 	setup.SetTestBucket(cfg.Operations[0].TestBucket)
 	ctx = context.Background()
@@ -166,12 +206,6 @@ func TestMain(m *testing.M) {
 
 	// Set up test directory.
 	setup.SetUpTestDirForTestBucket(cfg.Operations[0].TestBucket)
-
-	// Only running static_mounting test for TPC.
-	if setup.TestOnTPCEndPoint() {
-		successCodeTPC := static_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, m)
-		os.Exit(successCodeTPC)
-	}
 
 	successCode := static_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, m)
 
