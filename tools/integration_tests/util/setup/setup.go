@@ -137,9 +137,9 @@ func TestDir() string {
 	return testDir
 }
 
-// SetTestBucket sets the name of the bucket from the config file.
-func SetTestBucket(testBucketFromConfigFile string) {
-	testBucket = &testBucketFromConfigFile
+// SetTestBucket sets the name of the bucket.
+func SetTestBucket(testBucketValue string) {
+	testBucket = &testBucketValue
 }
 
 func SetMntDir(mntDirValue string) {

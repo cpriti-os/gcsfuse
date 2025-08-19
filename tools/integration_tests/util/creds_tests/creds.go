@@ -128,52 +128,12 @@ func RevokePermission(ctx context.Context, storageClient *storage.Client, servic
 // Deprecated: Use RunTestsForKeyFileAndGoogleApplicationCredentialsEnvVarSetWithConfigFile instead.
 // TODO(b/438068132): cleanup deprecated methods after migration is complete.
 func RunTestsForKeyFileAndGoogleApplicationCredentialsEnvVarSet(ctx context.Context, storageClient *storage.Client, testFlagSet [][]string, permission string, m *testing.M) (successCode int) {
-	serviceAccount, localKeyFilePath := CreateCredentials(ctx)
-	ApplyPermissionToServiceAccount(ctx, storageClient, serviceAccount, permission, setup.TestBucket())
-	defer RevokePermission(ctx, storageClient, serviceAccount, permission, setup.TestBucket())
-
-	// Without –key-file flag and GOOGLE_APPLICATION_CREDENTIALS
-	// This case will not get covered as gcsfuse internally authenticates from a metadata server on GCE VM.
-	// https://github.com/golang/oauth2/blob/master/google/default.go#L160
-
-	// Testing with GOOGLE_APPLICATION_CREDENTIALS env variable
-	err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", localKeyFilePath)
-	if err != nil {
-		setup.LogAndExit(fmt.Sprintf("Error in setting environment variable: %v", err))
+	config := &test_suite.TestConfig{
+		TestBucket:       setup.TestBucket(),
+		MountedDirectory: setup.MountedDirectory(),
+		LogFile:          setup.LogFile(),
 	}
-
-	successCode = static_mounting.RunTests(testFlagSet, m)
-
-	if successCode != 0 {
-		return
-	}
-
-	// Testing with --key-file and GOOGLE_APPLICATION_CREDENTIALS env variable set
-	keyFileFlag := "--key-file=" + localKeyFilePath
-
-	for i := 0; i < len(testFlagSet); i++ {
-		testFlagSet[i] = append(testFlagSet[i], keyFileFlag)
-	}
-
-	successCode = static_mounting.RunTests(testFlagSet, m)
-
-	if successCode != 0 {
-		return
-	}
-
-	err = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
-	if err != nil {
-		setup.LogAndExit(fmt.Sprintf("Error in unsetting environment variable: %v", err))
-	}
-
-	// Testing with --key-file flag only
-	successCode = static_mounting.RunTests(testFlagSet, m)
-
-	if successCode != 0 {
-		return
-	}
-
-	return successCode
+	return RunTestsForKeyFileAndGoogleApplicationCredentialsEnvVarSetWithConfigFile(config, ctx, storageClient, testFlagSet, permission, m)
 }
 
 func RunTestsForKeyFileAndGoogleApplicationCredentialsEnvVarSetWithConfigFile(config *test_suite.TestConfig, ctx context.Context, storageClient *storage.Client, testFlagSet [][]string, permission string, m *testing.M) (successCode int) {
