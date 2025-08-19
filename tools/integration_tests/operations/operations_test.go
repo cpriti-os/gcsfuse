@@ -161,19 +161,27 @@ func TestMain(m *testing.M) {
 		cfg.Operations = make([]test_suite.TestConfig, 1)
 		cfg.Operations[0].TestBucket = setup.TestBucket()
 		cfg.Operations[0].MountedDirectory = setup.MountedDirectory()
-		cfg.Operations[0].Configs = make([]test_suite.ConfigItem, 1)
+		cfg.Operations[0].Configs = make([]test_suite.ConfigItem, 2)
 		cfg.Operations[0].Configs[0].Flags = []string{
 			"--enable-atomic-rename-object=true",
 			"--experimental-enable-json-read=true",
 			"--client-protocol=grpc --implicit-dirs=true --enable-atomic-rename-object=true",
-			"--experimental-enable-json-read=true --enable-atomic-rename-object=true",
+			"--create-empty-file=true --enable-atomic-rename-object=true",
+			"--metadata-cache-ttl-secs=0 --enable-streaming-writes=false",
+			"--kernel-list-cache-ttl-secs=-1 --implicit-dirs=true",
+		}
+		cfg.Operations[0].Configs[1].Flags = []string{
+			"--experimental-enable-json-read=true --enable-atomic-rename-object=true"
+			"--client-protocol=grpc --implicit-dirs=true --enable-atomic-rename-object=true",
 			"--create-empty-file=true --enable-atomic-rename-object=true",
 			"--metadata-cache-ttl-secs=0 --enable-streaming-writes=false",
 			"--kernel-list-cache-ttl-secs=-1 --implicit-dirs=true",
 		}
 		cacheDirFlag := fmt.Sprintf("--file-cache-max-size-mb=2 --cache-dir=%s/cache-dir-operations-hns", os.TempDir())
 		cfg.Operations[0].Configs[0].Flags = append(cfg.Operations[0].Configs[0].Flags, cacheDirFlag)
-		cfg.Operations[0].Configs[0].Compatible = map[string]bool{"flat": true, "hns": true, "zonal": false}
+		cfg.Operations[0].Configs[1].Flags = append(cfg.Operations[0].Configs[1].Flags, cacheDirFlag)
+		cfg.Operations[0].Configs[0].Compatible = map[string]bool{"flat": true, "hns": false, "zonal": true}
+		cfg.Operations[0].Configs[1].Compatible = map[string]bool{"flat": false, "hns": true, "zonal": true}
 	}
 
 	// 2. Create storage client before running tests.
