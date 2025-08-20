@@ -171,7 +171,7 @@ func TestMain(m *testing.M) {
 			"--kernel-list-cache-ttl-secs=-1 --implicit-dirs=true",
 		}
 		cfg.Operations[0].Configs[1].Flags = []string{
-			"--experimental-enable-json-read=true --enable-atomic-rename-object=true"
+			"--experimental-enable-json-read=true --enable-atomic-rename-object=true",
 			"--client-protocol=grpc --implicit-dirs=true --enable-atomic-rename-object=true",
 			"--create-empty-file=true --enable-atomic-rename-object=true",
 			"--metadata-cache-ttl-secs=0 --enable-streaming-writes=false",
