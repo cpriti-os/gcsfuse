@@ -32,7 +32,6 @@ import (
 	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/mounting/static_mounting"
 	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/setup"
 	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/test_suite"
-	"gopkg.in/yaml.v3"
 )
 
 const DirForOperationTests = "dirForOperationsTest"
@@ -98,12 +97,7 @@ var (
 	err           error
 )
 
-// Config holds all test configurations parsed from the YAML file.
-type Config struct {
-	Operations []test_suite.TestConfig `yaml:"operations"`
-}
-
-func RunTestOnTPCEndPoint(cfg Config, m *testing.M) int {
+func RunTestOnTPCEndPoint(cfg test_suite.Config, m *testing.M) int {
 	ctx = context.Background()
 	if storageClient, err = client.CreateStorageClient(ctx); err != nil {
 		log.Fatalf("Error creating storage client: %v\n", err)
@@ -135,7 +129,9 @@ func RunTestOnTPCEndPoint(cfg Config, m *testing.M) int {
 }
 func TestMain(m *testing.M) {
 	setup.ParseSetUpFlags()
-	var cfg Config
+
+	// 1. Load and parse the common configuration.
+	cfg := test_suite.ReadConfigFile(setup.ConfigFile())
 
 	if setup.TestOnTPCEndPoint() {
 		log.Println("Running TPC tests without config file.")
@@ -143,20 +139,9 @@ func TestMain(m *testing.M) {
 		os.Exit(successCodeTPC)
 	}
 
-	// 1. Load and parse the common configuration.
-	if setup.ConfigFile() != "" {
-		configData, err := os.ReadFile(setup.ConfigFile())
-		if err != nil {
-			log.Fatalf("could not read test_config.yaml: %v", err)
-		}
-		expandedYaml := os.ExpandEnv(string(configData))
-		if err := yaml.Unmarshal([]byte(expandedYaml), &cfg); err != nil {
-			log.Fatalf("Failed to parse config YAML: %v", err)
-		}
-	}
 	var successCode int
 	if len(cfg.Operations) != 0 {
-		var tpcCfg Config
+		var tpcCfg test_suite.Config
 		setup.SetTestBucket(cfg.Operations[0].TestBucket)
 		var remainingConfigs []test_suite.ConfigItem
 
