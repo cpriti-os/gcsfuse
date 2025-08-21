@@ -138,7 +138,7 @@ func TestMain(m *testing.M) {
 	var cfg Config
 
 	if setup.TestOnTPCEndPoint() {
-		log.Println("Running TPC tests.")
+		log.Println("Running TPC tests without config file.")
 		successCodeTPC := RunTestOnTPCEndPoint(cfg, m)
 		os.Exit(successCodeTPC)
 	}
@@ -154,7 +154,19 @@ func TestMain(m *testing.M) {
 			log.Fatalf("Failed to parse config YAML: %v", err)
 		}
 	}
+	var successCode int
+	if len(cfg.Operations) != 0 {
+		if (cfg.Operations[0].Configs[len(cfg.Operations[0].Configs)-1].Tpc) == true { // will have to ensure that in config file, tpc config comes at the end.
+			log.Println("Running TPC tests with config file.")
+			var tpcCfg Config
+			setup.SetTestBucket(cfg.Operations[0].TestBucket)
+			successCode = RunTestOnTPCEndPoint(tpcCfg, m)
 
+			// Re-slice the array to exclude the last element.
+			cfg.Operations[0].Configs = cfg.Operations[0].Configs[:len(cfg.Operations[0].Configs)-1]
+		}
+
+	}
 	if len(cfg.Operations) == 0 {
 		log.Println("No configuration found for operations tests in config. Using flags instead.")
 		// Populate the config manually.
@@ -214,8 +226,9 @@ func TestMain(m *testing.M) {
 
 	// Set up test directory.
 	setup.SetUpTestDirForTestBucket(cfg.Operations[0].TestBucket)
-
-	successCode := static_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, m)
+	if successCode == 0 {
+		successCode = static_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, m)
+	}
 
 	if successCode == 0 {
 		successCode = only_dir_mounting.RunTestsWithConfigFile(&cfg.Operations[0], flags, onlyDirMounted, m)
