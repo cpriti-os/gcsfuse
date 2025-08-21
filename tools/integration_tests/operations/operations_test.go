@@ -156,17 +156,23 @@ func TestMain(m *testing.M) {
 	}
 	var successCode int
 	if len(cfg.Operations) != 0 {
-		if (cfg.Operations[0].Configs[len(cfg.Operations[0].Configs)-1].Tpc) == true { // will have to ensure that in config file, tpc config comes at the end.
-			log.Println("Running TPC tests with config file.")
-			var tpcCfg Config
-			setup.SetTestBucket(cfg.Operations[0].TestBucket)
-			successCode = RunTestOnTPCEndPoint(tpcCfg, m)
+		var tpcCfg Config
+		setup.SetTestBucket(cfg.Operations[0].TestBucket)
+		var remainingConfigs []test_suite.ConfigItem
 
-			// Re-slice the array to exclude the last element.
-			cfg.Operations[0].Configs = cfg.Operations[0].Configs[:len(cfg.Operations[0].Configs)-1]
+		for _, config := range cfg.Operations[0].Configs {
+			// Check if the Tpc field is true.
+			if config.Tpc {
+				log.Println("Running TPC test")
+				successCode = RunTestOnTPCEndPoint(tpcCfg, m)
+			} else {
+				// If the Tpc field is false, add it to the remainingConfigs slice.
+				remainingConfigs = append(remainingConfigs, config)
+			}
 		}
-
+		cfg.Operations[0].Configs = remainingConfigs
 	}
+
 	if len(cfg.Operations) == 0 {
 		log.Println("No configuration found for operations tests in config. Using flags instead.")
 		// Populate the config manually.
