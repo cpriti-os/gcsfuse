@@ -16,6 +16,8 @@ package gcsx
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -130,5 +132,59 @@ func garbageCollect(
 				objectsDeleted,
 				time.Since(startTime))
 		}
+	}
+}
+
+// TCPStats holds the counts for active and idle TCP connections.
+type TCPStats struct {
+	Active int
+	Idle   int
+}
+
+// startTCPMonitoring contains all the monitoring logic in a single function.
+// It sets up a ticker and, on each tick, reads and parses connection stats.
+func startTCPMonitoring(ctx context.Context) {
+	logger.Info("TCP Monitoring: goroutine is now running...")
+	const period = 10 * time.Second
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+
+	// The infinite loop runs within the single goroutine.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		// The logic for getting stats is now directly inside the loop.
+		// We reset the stats counter for each check.
+		stats := TCPStats{}
+		data, err := os.ReadFile("/proc/net/tcp")
+		if err != nil {
+			logger.Errorf("TCP Monitoring: Error reading /proc/net/tcp: %v", err)
+			continue // Skip this tick on error
+		}
+
+		lines := strings.Split(string(data), "\n")
+
+		// Iterate over each line, skipping the header.
+		for _, line := range lines[1:] {
+			fields := strings.Fields(line)
+			if len(fields) < 4 {
+				continue
+			}
+
+			// The connection's state is the 4th field (index 3).
+			// "01" means ESTABLISHED.
+			state := fields[3]
+			if state == "01" {
+				stats.Active++
+			} else {
+				stats.Idle++
+			}
+		}
+
+		// Print the final counts for this interval.
+		logger.Infof("TCP Monitoring: Active TCP Connections: %d, Idle TCP Connections: %d", stats.Active, stats.Idle)
 	}
 }
