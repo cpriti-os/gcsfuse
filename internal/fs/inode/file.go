@@ -20,6 +20,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/googlecloudplatform/gcsfuse/v3/cfg"
@@ -665,12 +666,18 @@ func (f *FileInode) flushUsingBufferedWriteHandler() error {
 	// If we finalized the object, we need to update our state.
 	f.updateInodeStateAfterFlush(obj)
 	if obj != nil {
-		f.PollForSizeUpdate(obj.Size)
+		f.PollForSizeUpdate("flush", uint64(obj.Generation), obj.Size)
 	}
 	return nil
 }
 
-func (f *FileInode) PollForSizeUpdate(size uint64) {
+var maxWaitedFlush string
+var maxRetriesFlush int
+var maxRetriesSync int
+var maxWaitedSync string
+var maxWaitedMu sync.Mutex
+
+func (f *FileInode) PollForSizeUpdate(op string, gen, size uint64) {
 	const (
 		interval   = 5 * time.Second
 		maxRetries = 5 * 12 // Poll for 5 minutes.
@@ -683,17 +690,34 @@ func (f *FileInode) PollForSizeUpdate(size uint64) {
 			Name: f.name.GcsObjectName(),
 		})
 		if err != nil {
-			logger.Infof("PollForSizeUpdate: failed to stat object %q: %v", f.name.GcsObjectName(), err)
+			logger.Infof("PollForSizeUpdate(%s): failed to stat object %q: %v", op, f.name.GcsObjectName(), err)
 			// Continue to retry.
 		} else if m.Size == size {
-			logger.Infof("PollForSizeUpdate Success: object %q has size %d, expected %d after %d retries.", f.name.GcsObjectName(), m.Size, size, i)
-			// The size is as expected or larger, so we can stop.
+			logger.Infof("PollForSizeUpdate(%s) Success: object %q has size %d, expected %d after %d retries.", op, f.name.GcsObjectName(), m.Size, size, i)
+			maxWaitedMu.Lock()
+			if op == "flush" {
+				if maxRetriesFlush < i {
+					maxRetriesFlush = i
+					maxWaitedFlush = op + " of " + f.name.GcsObjectName() + " for gen " + strconv.Itoa(int(gen)) + " took " + strconv.Itoa(i*5) + "seconds to reflect"
+					logger.Infof("BAD EVENT: %s", maxWaitedFlush)
+
+				}
+			} else {
+				if maxRetriesSync < i {
+					maxRetriesSync = i
+					maxWaitedSync = op + " of " + f.name.GcsObjectName() + " for gen " + strconv.Itoa(int(gen)) + " took " + strconv.Itoa(i*5) + "seconds to reflect"
+					logger.Infof("BAD EVENT: %s", maxWaitedSync)
+				}
+			}
+			maxWaitedMu.Unlock()
+			// The size is as expected, so we can stop.
 			return
 		} else {
-			logger.Infof("PollForSizeUpdate: object %q has size %d, expected to be %d Retrying...", f.name.GcsObjectName(), m.Size, size)
+			logger.Infof("PollForSizeUpdate(%s): object %q has size %d, expected to be %d Retrying...", op, f.name.GcsObjectName(), m.Size, size)
 		}
 		<-ticker.C
 	}
+	logger.Info("BAD EVENT: Didn't get correct size even after 5 minutes")
 }
 
 // SyncPendingBufferedWrites flushes any pending writes on the bwh to GCS.
@@ -723,7 +747,7 @@ func (f *FileInode) SyncPendingBufferedWrites() (gcsSynced bool, err error) {
 	// If we flushed out object, we need to update our state.
 	f.updateInodeStateAfterSync(minObj)
 	if minObj != nil {
-		f.PollForSizeUpdate(minObj.Size)
+		f.PollForSizeUpdate("sync", uint64(minObj.Generation), minObj.Size)
 	}
 	return
 }
