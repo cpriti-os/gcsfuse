@@ -664,7 +664,36 @@ func (f *FileInode) flushUsingBufferedWriteHandler() error {
 	}
 	// If we finalized the object, we need to update our state.
 	f.updateInodeStateAfterFlush(obj)
+	if obj != nil {
+		f.PollForSizeUpdate(obj.Size)
+	}
 	return nil
+}
+
+func (f *FileInode) PollForSizeUpdate(size uint64) {
+	const (
+		interval   = 5 * time.Second
+		maxRetries = 5 * 12 // Poll for 5 minutes.
+	)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for i := 0; i < maxRetries; i++ {
+		m, _, err := f.bucket.StatObject(context.Background(), &gcs.StatObjectRequest{
+			Name: f.name.GcsObjectName(),
+		})
+		if err != nil {
+			logger.Infof("PollForSizeUpdate: failed to stat object %q: %v", f.name.GcsObjectName(), err)
+			// Continue to retry.
+		} else if m.Size == size {
+			logger.Infof("PollForSizeUpdate Success: object %q has size %d, expected %d after %d retries.", f.name.GcsObjectName(), m.Size, size, i)
+			// The size is as expected or larger, so we can stop.
+			return
+		} else {
+			logger.Infof("PollForSizeUpdate: object %q has size %d, expected to be %d Retrying...", f.name.GcsObjectName(), m.Size, size)
+		}
+		<-ticker.C
+	}
 }
 
 // SyncPendingBufferedWrites flushes any pending writes on the bwh to GCS.
@@ -693,6 +722,9 @@ func (f *FileInode) SyncPendingBufferedWrites() (gcsSynced bool, err error) {
 	gcsSynced = minObj != nil
 	// If we flushed out object, we need to update our state.
 	f.updateInodeStateAfterSync(minObj)
+	if minObj != nil {
+		f.PollForSizeUpdate(minObj.Size)
+	}
 	return
 }
 
