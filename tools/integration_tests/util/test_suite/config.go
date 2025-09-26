@@ -69,6 +69,7 @@ type Config struct {
 	ReadDirPlus           []TestConfig `yaml:"readdirplus"`
 	DentryCache           []TestConfig `yaml:"dentry_cache"`
 	RequesterPaysBucket   []TestConfig `yaml:"requester_pays_bucket"`
+	FlagOverrides         []TestConfig `yaml:"flag_overrides"`
 }
 
 // ReadConfigFile returns a Config struct from the YAML file.
