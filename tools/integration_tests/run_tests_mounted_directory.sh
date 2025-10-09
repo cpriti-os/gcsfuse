@@ -762,11 +762,14 @@ done
 
 # Package flag_optimizations
 declare -A flag_optimizations_scenarios
-flag_optimizations_scenarios["--profile=aiml-training"]="TestOptimization/.*/profile=aiml-training.*"
-flag_optimizations_scenarios["--profile=aiml-checkpointing"]="TestOptimization/.*/profile=aiml-checkpointing.*"
-flag_optimizations_scenarios["--profile=aiml-serving"]="TestOptimization/.*/profile=aiml-serving.*"
 flag_optimizations_scenarios[" "]="TestOptimization/no_profile_on_low_end_machine"
 flag_optimizations_scenarios["--machine-type=a3-highgpu-8g"]="TestOptimization/no_profile_on_high_end_machine"
+flag_optimizations_scenarios["--profile=aiml-training"]="TestOptimization/training_on_low_end_machine"
+flag_optimizations_scenarios["--profile=aiml-checkpointing"]="TestOptimization/checkpointing_on_low_end_machine"
+flag_optimizations_scenarios["--profile=aiml-serving"]="TestOptimization/serving_on_low_end_machine"
+flag_optimizations_scenarios["--machine-type=a3-highgpu-8g --profile=aiml-training"]="TestOptimization/training_on_high_end_machine"
+flag_optimizations_scenarios["--machine-type=a3-highgpu-8g --profile=aiml-checkpointing"]="TestOptimization/checkpointing_on_high_end_machine"
+flag_optimizations_scenarios["--machine-type=a3-highgpu-8g --profile=aiml-serving"]="TestOptimization/serving_on_high_end_machine"
 for flags in "${!flag_optimizations_scenarios[@]}"; do
   printf "\n=============================================================\n"
   echo "Running flag_optimizations test with \"${flags}\" ... "
