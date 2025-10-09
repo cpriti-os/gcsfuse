@@ -120,7 +120,10 @@ func (t *optimizationTests) testRenameDirLimitSet() {
 	mountedDstDirPath := filepath.Join(setup.MntDir(), dstDirPath)
 	require.NoError(t.T(), client.CreateGcsDir(testEnv.ctx, testEnv.storageClient, srcDirPath, setup.TestBucket(), ""))
 	client.CreateNFilesInDir(testEnv.ctx, testEnv.storageClient, 1, "file", 1024, srcDirPath, t.T())
-	defer client.MustDeleteAllObjectsWithPrefix(testEnv.ctx, testEnv.storageClient, srcDirPath)
+	defer func() {
+		client.MustDeleteAllObjectsWithPrefix(testEnv.ctx, testEnv.storageClient, srcDirPath)
+		client.MustDeleteAllObjectsWithPrefix(testEnv.ctx, testEnv.storageClient, dstDirPath)
+	}()
 
 	err := os.Rename(mountedSrcDirPath, mountedDstDirPath)
 
@@ -162,10 +165,6 @@ func TestOptimization(t *testing.T) {
 	if setup.ResolveIsHierarchicalBucket(testEnv.ctx, setup.TestBucket(), testEnv.storageClient) {
 		t.Skipf("test not applicable for HNS buckets")
 	}
-
-	//if setup.AreBothMountedDirectoryAndTestBucketFlagsSet() {
-	//t.Skipf("test not applicable for mountedDirectory")
-	//}
 
 	// Helper functions to create flags, test case names etc.
 	flags := func(profile string, machineType string) []string {
