@@ -428,6 +428,12 @@ stale_handle:
     configs:
       - flags:
         - "--metadata-cache-ttl-secs=0 --enable-streaming-writes=false --client-protocol=grpc"
+        compatible:
+          flat: true
+          hns: true
+          zonal: true
+        run: TestStaleFileHandleLocalFileTest
+      - flags:
         - "--metadata-cache-ttl-secs=0 --write-block-size-mb=1 --write-max-blocks-per-file=1 --client-protocol=grpc"
         compatible:
           flat: true
@@ -436,9 +442,29 @@ stale_handle:
         run: TestStaleFileHandleLocalFileTest
       - flags:
         - "--metadata-cache-ttl-secs=0 --enable-streaming-writes=false --client-protocol=grpc"
+        compatible:
+          flat: true
+          hns: true
+          zonal: true
+        run: TestStaleFileHandleEmptyGcsFileTest
+      - flags:
         - "--metadata-cache-ttl-secs=0 --write-block-size-mb=1 --write-max-blocks-per-file=1 --client-protocol=grpc"
         compatible:
           flat: true
           hns: true
           zonal: true
         run: TestStaleFileHandleEmptyGcsFileTest
+      - flags:
+        - "--metadata-cache-ttl-secs=0 --enable-streaming-writes=false --client-protocol=grpc"
+        compatible:
+          flat: true
+          hns: true
+          zonal: true
+        run: TestStaleFileHandleSyncedFileTest
+      - flags:
+        - "--metadata-cache-ttl-secs=0 --write-block-size-mb=1 --write-max-blocks-per-file=1 --client-protocol=grpc"
+        compatible:
+          flat: true
+          hns: true
+          zonal: true
+        run: TestStaleFileHandleSyncedFileTest
