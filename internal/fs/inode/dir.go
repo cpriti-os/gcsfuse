@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/googlecloudplatform/gcsfuse/v3/internal/cache/metadata"
@@ -40,6 +41,12 @@ import (
 // By default 1000 results are returned if maxResults is not set.
 // Defining a constant to set maxResults param.
 const MaxResultsForListObjectsCall = 5000
+
+// Constants for the prefetch state
+const (
+	prefetchReady      uint32 = 0
+	prefetchInProgress uint32 = 1
+)
 
 // An inode representing a directory, with facilities for listing entries,
 // looking up children, and creating and deleting children. Must be locked for
@@ -241,6 +248,18 @@ type dirInode struct {
 	// Represents if folder has been unlinked in hierarchical bucket. This is not getting used in
 	// non-hierarchical bucket.
 	unlinked bool
+
+	/////////////////////////
+	// Prefetching POC state
+	/////////////////////////
+	metadataCacheTTL time.Duration
+	prefetchTrigger  chan struct{}
+	prefetchStop     chan struct{}
+	prefetchState    atomic.Uint32 // 0=Ready, 1=InProgress
+
+	// lastPrefetchTime is managed *only* by the runPrefetcher goroutine,
+	// so it doesn't need its own lock.
+	lastPrefetchTime time.Time
 }
 
 var _ DirInode = &dirInode{}
@@ -298,6 +317,13 @@ func NewDirInode(
 		isHNSEnabled:                   isHNSEnabled,
 		isUnsupportedDirSupportEnabled: isUnsupportedDirSupportEnabled,
 		unlinked:                       false,
+
+		// POC: Initialize prefetch channels
+		metadataCacheTTL: typeCacheTTL,
+		prefetchTrigger:  make(chan struct{}, 1), // Buffer of 1
+		prefetchStop:     make(chan struct{}),
+		// prefetchState is 0 (prefetchReady) by default
+		// lastPrefetchTime is time.Time{} (zero) by default
 	}
 
 	typed.lc.Init(id)
@@ -306,12 +332,86 @@ func NewDirInode(
 	typed.mu = locker.NewRW(name.GcsObjectName(), typed.checkInvariants)
 
 	d = typed
+
+	// POC: Start the prefetch worker goroutine for this directory
+	go typed.runPrefetcher()
+
 	return
 }
 
 ////////////////////////////////////////////////////////////////////////
 // Helpers
 ////////////////////////////////////////////////////////////////////////
+
+// runPrefetcher runs in a background goroutine, listening for triggers
+// from LookUpChild.
+// runPrefetcher runs in a background goroutine, listening for triggers.
+func (d *dirInode) runPrefetcher() {
+	ctx := context.Background()
+
+	for {
+		select {
+		case <-d.prefetchStop:
+			// Inode is being destroyed, stop.
+			return
+
+		case <-d.prefetchTrigger:
+			// A trigger came in.
+			// Spawn a new goroutine to do the work so this
+			// loop is not blocked and can respond to prefetchStop.
+			go d.doFullPrefetch(ctx)
+		}
+	}
+}
+
+// doFullPrefetch performs the full directory listing if the TTL has expired.
+func (d *dirInode) doFullPrefetch(ctx context.Context) {
+	// 1. Check State and TTL
+	// Atomically swap state from Ready (0) to InProgress (1).
+	if !d.prefetchState.CompareAndSwap(prefetchReady, prefetchInProgress) {
+		// Another prefetch is already in progress. Abort.
+		return
+	}
+
+	// We are now in the InProgress state. We must reset to Ready before returning.
+	defer d.prefetchState.Store(prefetchReady)
+
+	now := d.cacheClock.Now()
+	if now.Sub(d.lastPrefetchTime) < d.metadataCacheTTL {
+		// Not time yet. Abort.
+		return
+	}
+
+	// 2. Run the Prefetch
+	var tok string
+	for {
+		// Perform slow network I/O *without* holding the inode lock.
+		cores, _, newTok, err := d.readObjects(ctx, tok)
+		if err != nil {
+			logger.Warnf("Prefetch failed for %s: %v", d.Name().GcsObjectName(), err)
+			return // Abort. Will retry on next TTL-expired cache miss.
+		}
+
+		// Acquire lock *only* for the fast in-memory typeCache update.
+		d.mu.Lock()
+		nowForCache := d.cacheClock.Now()
+		for fullName, c := range cores {
+			// readObjects populates d.cache via its internal logic
+			// but we must re-insert here while holding the lock
+			// to be 100% thread-safe.
+			d.cache.Insert(nowForCache, path.Base(fullName.LocalName()), c.Type())
+		}
+		d.mu.Unlock()
+
+		if newTok == "" {
+			break // Entire directory has been listed.
+		}
+		tok = newTok
+	}
+
+	// 3. Update Timestamp on Success
+	d.lastPrefetchTime = now
+}
 
 func (d *dirInode) checkInvariants() {
 	// INVARIANT: d.name.IsDir()
@@ -521,7 +621,8 @@ func (d *dirInode) DecrementLookupCount(n uint64) (destroy bool) {
 
 // LOCKS_REQUIRED(d)
 func (d *dirInode) Destroy() (err error) {
-	// Nothing interesting to do.
+	// POC: Signal the prefetcher goroutine to stop if any.
+	close(d.prefetchStop)
 	return
 }
 
@@ -619,8 +720,21 @@ func (d *dirInode) LookUpChild(ctx context.Context, name string) (*Core, error) 
 	}
 
 	if result != nil {
+		// This is our SUCCESS signal. The file/dir exists in GCS.
+		// Trigger a prefetch if one is not already in progress.
+		if d.prefetchState.Load() == prefetchReady {
+			select {
+			case d.prefetchTrigger <- struct{}{}:
+				logger.Info("triggering prefetch")
+			default: // Non-blocking, drop if worker is busy.
+			}
+		}
+
+		// Now, continue with the original logic to cache this single result.
 		d.cache.Insert(d.cacheClock.Now(), name, result.Type())
 	} else if d.enableNonexistentTypeCache && cachedType == metadata.UnknownType {
+		// GCS call returned nil, so the file doesn't exist.
+		// We DO NOT trigger a prefetch in this case.
 		d.cache.Insert(d.cacheClock.Now(), name, metadata.NonexistentType)
 	}
 
